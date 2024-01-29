@@ -1,0 +1,1 @@
+/usr/bin/cc -rdynamic CMakeFiles/subdevice_basic_demo.dir/subdevice_basic_demo.c.o -o ../../bin/subdevice_basic_demo  -Wl,-rpath,/home/studentas/Workspaces/Tuya-Daemon/tuya_switch_comm/build/lib ../../lib/liblink_core.so ../../lib/libmiddleware_implementation.so ../../lib/libplatform_port.so ../../lib/libutils_modules.so 
