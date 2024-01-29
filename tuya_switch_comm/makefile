@@ -7,7 +7,7 @@ BLD_DIR := ./build
 INC_DIR := ./inc
 LIB_DIR := ./lib
 SRC_DIR := ./src
-TUYA_SDK_DIR := ../tuya-iot-core-sdk-main/
+TUYA_SDK_DIR := ../tuya-iot-core-sdk-main
 
 SO_INCLUDES := \
 -I$(TUYA_SDK_DIR)/utils\
@@ -20,12 +20,12 @@ OBJ := $(patsubst $(SRC_DIR)%.c,$(BLD_DIR)%.o,$(SRC))
 
 #full path
 lib_names = \
-./build/lib/libutils_modules.so\
-./build/lib/liblink_core.so\
-./build/lib/libmiddleware_implementation.so\
-./build/lib/libplatform_port.so
-lib_names2 := $(lib_names:$(BLD_DIR)/lib/lib%.so=%) #just the name
-lib_names3 := $(lib_names:$(BLD_DIR)/lib/lib%.so=-l%) #add an -l flag
+$(TUYA_SDK_DIR)/build/lib/libutils_modules.so\
+$(TUYA_SDK_DIR)/build/lib/liblink_core.so\
+$(TUYA_SDK_DIR)/build/lib/libmiddleware_implementation.so\
+$(TUYA_SDK_DIR)/build/lib/libplatform_port.so
+lib_names2 := $(lib_names:*lib%.so=%) #just the name
+lib_names3 := $(lib_names:*lib%.so=-l%) #add an -l flag
 
 .PHONY: all
 all:$(BLD_DIR)/$(BIN_DIR)/$(BIN)
@@ -38,8 +38,9 @@ $(OBJ): $(BLD_DIR)/%.o: $(SRC_DIR)/%.c
 
 .PHONY: builddeps
 builddeps:
-	mkdir -p $(BLD_DIR)
-	cd $(BLD_DIR) && cmake ../$(TUYA_SDK_DIR) && $(MAKE)
+	mkdir -p $(BLD_DIR)/$(BIN_DIR)
+	mkdir -p $(TUYA_SDK_DIR)/$(BLD_DIR)
+	cd $(TUYA_SDK_DIR)/$(BLD_DIR) && cmake .. && $(MAKE)
 	cd $(SRC_DIR) && make
 
 .PHONY: install
@@ -53,3 +54,4 @@ uninstall:
 .PHONY: clean
 clean:
 	$(RM) -r $(BLD_DIR)
+	$(RM) -r $(TUYA_SDK_DIR)/$(BLD_DIR)

@@ -2,34 +2,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "cJSON.h"
-#include "tuya_cacert.h"
 #include "tuya_log.h"
 #include "tuya_error_code.h"
 #include "system_interface.h"
 #include "mqtt_client_interface.h"
 #include "tuyalink_core.h"
 #include <signal.h>
-#include <sys/sysinfo.h>
-//daemon begin
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <syslog.h>
 #include <unistd.h>
 #include "become_daemon.h"
-//daemon end
 #include <argp.h>
-
-typedef struct {
-    double r;       // a fraction between 0 and 1
-    double g;       // a fraction between 0 and 1
-    double b;       // a fraction between 0 and 1
-} rgb;
-
-typedef struct {
-    double h;       // angle in degrees
-    double s;       // a fraction between 0 and 1
-    double v;       // a fraction between 0 and 1
-} hsv;
+#include "hsv2rgb.h"
+#include "tuya_personal_funcions.h"
 
 static char doc[] = "Program to communicate with tuya cloud";
 static char args_doc[] = "Device-ID Pruduct-ID Device-secret";
@@ -39,13 +25,6 @@ static struct argp_option options[] = {
     {"device-secret", 's', "Dev-S", 0, "Enter Device secret", 0},
     {"start-as-daemon", 'b', 0, 0, "Start as daemon", 0},
     {0}
-};
-struct arguments
-{
-    char *deviceId[30];
-    char *productId[30];
-    char *deviceSecret[30];
-    int start_as_daemon;
 };
 static error_t parse_opt (int key, char *arg,struct argp_state *state)
 {
@@ -68,6 +47,7 @@ static error_t parse_opt (int key, char *arg,struct argp_state *state)
         if (!strcmp(arguments->deviceId,"") || !strcmp(arguments->productId,"") || !strcmp(arguments->deviceSecret,"")) {
             printf("please enter deviceId, productId and deviceSecret.\n");
             printf("Try `%s --help' or `%s --usage' for more information.\n",__FILE__,__FILE__);
+            return(1);
         } else {
             printf("deviceId: %s\nproductId: %s\ndeviceSecret: %s\n",arguments->deviceId,arguments->productId,arguments->deviceSecret);
         }
@@ -79,65 +59,6 @@ struct argp argp = {options, parse_opt, args_doc, doc, 0, 0, 0};
 
 tuya_mqtt_context_t client_instance;
 tuya_mqtt_context_t* client = &client_instance;
-
-
-static rgb hsv2rgb(hsv in)
-{
-    double      hh, p, q, t, ff;
-    long        i;
-    rgb         out;
-
-    if(in.s <= 0.0) {       // < is bogus, just shuts up warnings
-        out.r = in.v;
-        out.g = in.v;
-        out.b = in.v;
-        return out;
-    }
-    hh = in.h;
-    if(hh >= 360.0) hh = 0.0;
-    hh /= 60.0;
-    i = (long)hh;
-    ff = hh - i;
-    p = in.v * (1.0 - in.s);
-    q = in.v * (1.0 - (in.s * ff));
-    t = in.v * (1.0 - (in.s * (1.0 - ff)));
-
-    switch(i) {
-    case 0:
-        out.r = in.v;
-        out.g = t;
-        out.b = p;
-        break;
-    case 1:
-        out.r = q;
-        out.g = in.v;
-        out.b = p;
-        break;
-    case 2:
-        out.r = p;
-        out.g = in.v;
-        out.b = t;
-        break;
-
-    case 3:
-        out.r = p;
-        out.g = q;
-        out.b = in.v;
-        break;
-    case 4:
-        out.r = t;
-        out.g = p;
-        out.b = in.v;
-        break;
-    case 5:
-    default:
-        out.r = in.v;
-        out.g = p;
-        out.b = q;
-        break;
-    }
-    return out;     
-}
 
 static void sig_handler()
 {
@@ -185,74 +106,61 @@ void on_messages(tuya_mqtt_context_t* context, void* user_data, const tuyalink_m
 }
 
 int main(int argc, char** argv)
-{
-    signal(SIGINT,sig_handler); // Register signal handlers
-    signal(SIGQUIT,sig_handler);
-    const char *LOGNAME = "TUYA_COMM"; // Name and open logfile
-    openlog(LOGNAME, LOG_PID, LOG_USER);
-
+{   
     int ret = OPRT_OK;
 
     //argp begin
     struct arguments arguments;
     arguments.start_as_daemon = 0;
-    argp_parse (&argp, argc, argv, 0, 0, &arguments);
-    //argp end
+    ret = argp_parse (&argp, argc, argv, 0, 0, &arguments);
+    if (argc < 3){
+        ret = -1;
+        return ret;
+    }
+    // argp end
 
+    signal(SIGINT,sig_handler); // Register signal handlers
+    signal(SIGQUIT,sig_handler);
+    signal(SIGTERM,sig_handler);
+
+    const char *LOGNAME = "TUYA_COMM"; // Name and open logfile
+    openlog(LOGNAME, LOG_PID, LOG_USER);
+    
     // daemon begin
     if(arguments.start_as_daemon == 1){
         ret = become_daemon(0); 
         if(ret)
         {
             syslog(LOG_USER | LOG_ERR, "error starting daemon process");
-            closelog();
-            return EXIT_FAILURE;
-        } else {
-            syslog(LOG_USER | LOG_INFO, "starting daemon process");
+            goto closelog;
         }
+        syslog(LOG_USER | LOG_INFO, "starting daemon process");
     }
     // daemon end
 
-    ret = tuya_mqtt_init(client, &(const tuya_mqtt_config_t) {
-        .host = "m1.tuyacn.com",
-        .port = 8883,
-        .cacert = tuya_cacert_pem,
-        .cacert_len = sizeof(tuya_cacert_pem),
-        .device_id = arguments.deviceId,
-        .device_secret = arguments.deviceSecret,
-        .keepalive = 100,   
-        .timeout_ms = 2000,
-        .on_messages = on_messages
-    });
+    ret = tuya_mqtt_init_personal(client,&arguments,(&on_messages));
     if(ret != OPRT_OK){
         syslog(LOG_USER | LOG_INFO, "error initiating mqtt");
-        closelog();
-        return(ret);
+        goto closelog;
     }
     syslog(LOG_USER | LOG_INFO, "success initiating mqtt");
 
     ret = tuya_mqtt_connect(client);
     if(ret != OPRT_OK){
-        tuya_mqtt_deinit(client); //deinit upon fail
         syslog(LOG_USER | LOG_INFO, "error connecting to mqtt");
-        closelog();
-        return(ret);
+        goto deinit;
     }
     syslog(LOG_USER | LOG_INFO, "success connecting to mqtt");
 
-    struct sysinfo info;
-    char free_memory_percent[120];
     for (;;) {
         /* Loop to receive packets, and handles client keepalive */
-        if (sysinfo(&info) != 0){
-            syslog(LOG_USER | LOG_ERR, "Error getting system info");
-        } else {
-            double freePercentage = ((double)info.freeram/info.totalram)*100.0;
-            sprintf(free_memory_percent,"{\"f_m_p\":%.2f}",freePercentage);
-            tuyalink_thing_property_report_with_ack(client, NULL,free_memory_percent);
-            syslog(LOG_USER | LOG_INFO, "sending: %s",free_memory_percent);
-        }
+        send_f_m_p_to_tuya(client);
         tuya_mqtt_loop(client);
     }
+    tuya_mqtt_disconnect(client);
+    deinit:
+    tuya_mqtt_deinit(client);
+    closelog:
+    closelog();
     return ret;
 }
