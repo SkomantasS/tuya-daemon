@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include "become_daemon.h"
 //daemon end
+#include <argp.h>
 
 typedef struct {
     double r;       // a fraction between 0 and 1
@@ -30,43 +31,55 @@ typedef struct {
     double v;       // a fraction between 0 and 1
 } hsv;
 
-char deviceId[30];
-char productId[30];
-char deviceSecret[30];
-int start_as_daemon = 0;
-tuya_mqtt_context_t client_instance;
-tuya_mqtt_context_t* client = &client_instance;
-
-//argp begin
-#include <argp.h>
-static int parse_otp (int key, char *arg,struct argp_state *state)
+static char doc[] = "Program to communicate with tuya cloud";
+static char args_doc[] = "Device-ID Pruduct-ID Device-secret";
+static struct argp_option options[] = {
+    {"device-ID", 'd', "Dev-ID", 0, "Enter Device ID", 0},
+    {"product-ID", 'p', "Prod-ID", 0, "Enter Product ID ", 0},
+    {"device-secret", 's', "Dev-S", 0, "Enter Device secret", 0},
+    {"start-as-daemon", 'b', 0, 0, "Start as daemon", 0},
+    {0}
+};
+struct arguments
 {
+    char *deviceId[30];
+    char *productId[30];
+    char *deviceSecret[30];
+    int start_as_daemon;
+};
+static error_t parse_opt (int key, char *arg,struct argp_state *state)
+{
+    struct arguments *arguments = state->input;
     switch (key) {
     case 'd':
-        strcpy(deviceId, arg);
+        strcpy(arguments->deviceId, arg);
         break;
     case 'p':
-        strcpy(productId, arg);
+        strcpy(arguments->productId, arg);
         break;
     case 's':
-        strcpy(deviceSecret, arg);
+        strcpy(arguments->deviceSecret, arg);
         break;
     case 'b':
-        start_as_daemon = 1;
+        arguments->start_as_daemon = 1;
         printf("START AS DAEMON ENABLED");
         break;
     case ARGP_KEY_FINI:
-        if (!strcmp(deviceId,"") || !strcmp(productId,"") || !strcmp(deviceSecret,"")) {
+        if (!strcmp(arguments->deviceId,"") || !strcmp(arguments->productId,"") || !strcmp(arguments->deviceSecret,"")) {
             printf("please enter deviceId, productId and deviceSecret.\n");
             printf("Try `%s --help' or `%s --usage' for more information.\n",__FILE__,__FILE__);
         } else {
-            printf("deviceId: %s\nproductId: %s\ndeviceSecret: %s\n",deviceId,productId,deviceSecret);
+            printf("deviceId: %s\nproductId: %s\ndeviceSecret: %s\n",arguments->deviceId,arguments->productId,arguments->deviceSecret);
         }
         break;
     }
     return 0;
 }
-//argp end
+struct argp argp = {options, parse_opt, args_doc, doc, 0, 0, 0};
+
+tuya_mqtt_context_t client_instance;
+tuya_mqtt_context_t* client = &client_instance;
+
 
 static rgb hsv2rgb(hsv in)
 {
@@ -175,28 +188,19 @@ int main(int argc, char** argv)
 {
     signal(SIGINT,sig_handler); // Register signal handlers
     signal(SIGQUIT,sig_handler);
-
     const char *LOGNAME = "TUYA_COMM"; // Name and open logfile
     openlog(LOGNAME, LOG_PID, LOG_USER);
 
     int ret = OPRT_OK;
 
     //argp begin
-    struct argp_option
-        options[] = {
-            {"device-ID", 'd', "NUM2", 0, "Device ID", 0},
-            {"product-ID", 'p', "NUM1", 0, "Product ID ", 0},
-            {"device-secret", 's', "NUM3", 0, "Device secret", 0},
-            {"start-as-daemon", 'b', 0, 0, "Start as daemon?", 0},
-            {0}
-        };
-    struct argp
-        argp = {options, parse_otp, "", 0, 0, 0, 0};
-    argp_parse (&argp, argc, argv, 0, 0, 0);
+    struct arguments arguments;
+    arguments.start_as_daemon = 0;
+    argp_parse (&argp, argc, argv, 0, 0, &arguments);
     //argp end
 
     // daemon begin
-    if(start_as_daemon == 1){
+    if(arguments.start_as_daemon == 1){
         ret = become_daemon(0); 
         if(ret)
         {
@@ -209,14 +213,13 @@ int main(int argc, char** argv)
     }
     // daemon end
 
-    // tuya_mqtt_context_t* client = &client_instance;
     ret = tuya_mqtt_init(client, &(const tuya_mqtt_config_t) {
         .host = "m1.tuyacn.com",
         .port = 8883,
         .cacert = tuya_cacert_pem,
         .cacert_len = sizeof(tuya_cacert_pem),
-        .device_id = deviceId,
-        .device_secret = deviceSecret,
+        .device_id = arguments.deviceId,
+        .device_secret = arguments.deviceSecret,
         .keepalive = 100,   
         .timeout_ms = 2000,
         .on_messages = on_messages
@@ -230,7 +233,7 @@ int main(int argc, char** argv)
 
     ret = tuya_mqtt_connect(client);
     if(ret != OPRT_OK){
-        tuya_mqtt_deinit(client);
+        tuya_mqtt_deinit(client); //deinit upon fail
         syslog(LOG_USER | LOG_INFO, "error connecting to mqtt");
         closelog();
         return(ret);
