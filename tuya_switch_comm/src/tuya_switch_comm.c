@@ -18,10 +18,6 @@
 #include "become_daemon.h"
 //daemon end
 
-// const char deviceId[] = "26f2d94b1a1eccde12phyv";
-// const char productId[] = "hvvfnxdvyjd2q2w4";
-// const char deviceSecret[] = "n8Ed3QCiLy1D2Fc3";
-
 typedef struct {
     double r;       // a fraction between 0 and 1
     double g;       // a fraction between 0 and 1
@@ -148,11 +144,11 @@ void on_messages(tuya_mqtt_context_t* context, void* user_data, const tuyalink_m
         syslog(LOG_USER | LOG_INFO,"Model data:%s", msg->data_string);
         break;
 
-    case THING_TYPE_PROPERTY_SET:
+    case THING_TYPE_PROPERTY_SET: ;
         char var_name[50];
         char var_var[50];
         char message_out[105];
-        TY_LOGI(msg->data_string);
+        // TY_LOGI(msg->data_string);
 
         sscanf(msg->data_string,"{\"%49[^\"]\":%49[^}]\"}",var_name,var_var);
         sprintf(message_out,"{\"%s\":%s}",var_name,var_var);
@@ -160,7 +156,7 @@ void on_messages(tuya_mqtt_context_t* context, void* user_data, const tuyalink_m
         tuyalink_thing_property_report_with_ack(context,NULL,message_out);
         syslog(LOG_USER | LOG_INFO,"property set:%s", msg->data_string);
         break;
-    case THING_TYPE_ACTION_EXECUTE:
+    case THING_TYPE_ACTION_EXECUTE: ;
         hsv myHSV;
         sscanf(msg->data_string,"{\"inputParams\":{\"saturation_id\":%lf,\"hue_id\":%lf,\"value_id\":%lf}]},\"actionCode\":\"LED_controll\"}",&myHSV.s,&myHSV.h,&myHSV.v);
         syslog(LOG_USER | LOG_INFO,"H:%lf S:%lf V:%lf\n",myHSV.h,myHSV.s,myHSV.v);
@@ -179,6 +175,7 @@ int main(int argc, char** argv)
 {
     signal(SIGINT,sig_handler); // Register signal handlers
     signal(SIGQUIT,sig_handler);
+
     const char *LOGNAME = "TUYA_COMM"; // Name and open logfile
     openlog(LOGNAME, LOG_PID, LOG_USER);
 
@@ -200,7 +197,7 @@ int main(int argc, char** argv)
 
     // daemon begin
     if(start_as_daemon == 1){
-        ret = become_daemon(0);
+        ret = become_daemon(0); 
         if(ret)
         {
             syslog(LOG_USER | LOG_ERR, "error starting daemon process");
@@ -233,6 +230,7 @@ int main(int argc, char** argv)
 
     ret = tuya_mqtt_connect(client);
     if(ret != OPRT_OK){
+        tuya_mqtt_deinit(client);
         syslog(LOG_USER | LOG_INFO, "error connecting to mqtt");
         closelog();
         return(ret);
