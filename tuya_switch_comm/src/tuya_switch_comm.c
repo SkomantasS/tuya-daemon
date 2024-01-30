@@ -6,17 +6,13 @@
 #include "tuya_error_code.h"
 #include "system_interface.h"
 #include "mqtt_client_interface.h"
-// #include "tuyalink_core.h" //tuyalink_core
 #include <signal.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <syslog.h>
 #include <unistd.h>
 #include "become_daemon.h"
-// #include <argp.h>
-// #include "hsv2rgb.h"
-#include "tuya_personal_funcions.h"
-// #include "arg_praser.h"
+#include "tuya_funcions.h"
 
 tuya_mqtt_context_t client_instance;
 tuya_mqtt_context_t* client = &client_instance;
@@ -47,17 +43,17 @@ int main(int argc, char** argv)
     struct arguments arguments;
     arguments.start_as_daemon = 0;
     ret = argp_parse (&argp, argc, argv, 0, 0, &arguments);
-    if (argc < 3){
+    if (argc < 7){
         ret = -1;
         return ret;
     }
     // argp end
 
-    signal(SIGINT,sig_handler); // Register signal handlers
+    signal(SIGINT,sig_handler);
     signal(SIGQUIT,sig_handler);
     signal(SIGTERM,sig_handler);
 
-    const char *LOGNAME = "TUYA_COMM"; // Name and open logfile
+    const char *LOGNAME = "TUYA_COMM";
     openlog(LOGNAME, LOG_PID, LOG_USER);
     
     // daemon begin

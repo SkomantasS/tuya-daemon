@@ -1,4 +1,4 @@
-#include "tuya_personal_funcions.h"
+#include "tuya_funcions.h"
 #include "tuya_cacert.h"
 #include "hsv2rgb.h"
 #include <syslog.h>
