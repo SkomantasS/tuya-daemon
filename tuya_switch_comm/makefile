@@ -54,4 +54,9 @@ uninstall:
 .PHONY: clean
 clean:
 	$(RM) -r $(BLD_DIR)
+#	$(RM) -r $(TUYA_SDK_DIR)/$(BLD_DIR)
+
+.PHONY: cleanSDK
+cleanSDK:
+	$(RM) -r $(BLD_DIR)
 	$(RM) -r $(TUYA_SDK_DIR)/$(BLD_DIR)
