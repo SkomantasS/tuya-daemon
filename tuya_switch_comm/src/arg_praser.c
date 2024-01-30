@@ -21,7 +21,7 @@ error_t parse_opt (int key, char *arg,struct argp_state *state)
     case ARGP_KEY_FINI:
         if (!strcmp(arguments->deviceId,"") || !strcmp(arguments->productId,"") || !strcmp(arguments->deviceSecret,"")) {
             printf("please enter deviceId, productId and deviceSecret.\n");
-            printf("Try `%s --help' or `%s --usage' for more information.\n",__FILE__,__FILE__);
+            printf("Try `%s --help' or `%s --usage' for more information.\n",state->argv[0],state->argv[0]);
             return(1);
         } else {
             printf("deviceId: %s\nproductId: %s\ndeviceSecret: %s\n",arguments->deviceId,arguments->productId,arguments->deviceSecret);
